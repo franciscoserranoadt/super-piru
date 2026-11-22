@@ -226,7 +226,7 @@ function buildLevels() {
   put(L, 8, 9, 'BMB'); en(L, 'g', 14, 12);
   fill(L, 18, 18, 10, 12, 'X'); en(L, 'r', 18, 9, { sp: 1.6 });
   put(L, 26, 9, '-'); en(L, 'g', 33, 12); en(L, 's', 38, 12);
-  fill(L, 40, 41, 8, 12, 'X'); en(L, 'r', 41, 7, { sp: -1.8 });
+  fill(L, 40, 41, 10, 12, 'X'); en(L, 'r', 40, 10, { sp: -1.6, n: 5 });
   put(L, 46, 9, '--'); put(L, 49, 7, '-');
   put(L, 56, 8, 'B?B?B'); en(L, 's', 60, 12); en(L, 'g', 64, 12); en(L, 'r', 68, 10, { sp: 2.2, n: 7 }); fill(L, 68, 68, 11, 12, 'X');
   en(L, 'm', 75, 11, { dx: 2 });
@@ -921,7 +921,7 @@ function killEnemy(e, flip) {
 }
 
 /* ---------- Actualización ---------- */
-const GRAV = 2050, GRAV_HOLD = 1300, JUMP_V = 600, WALK = 175, RUN = 270, ACC_G = 1500, ACC_A = 950, FRIC = 1700;
+const GRAV = 2050, GRAV_HOLD = 1300, JUMP_V = 620, WALK = 175, RUN = 270, ACC_G = 1500, ACC_A = 950, FRIC = 1700;
 function updatePlayer(dt) {
   const p = P;
   if (p.state === 'dead') {
