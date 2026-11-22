@@ -17,10 +17,22 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 public class MainActivity extends Activity {
 
     private WebView web;
     private SharedPreferences prefs;
+
+    // Las actualizaciones del juego se descargan de aquí (repositorio público)
+    private static final String BASE = "https://raw.githubusercontent.com/franciscoserranoadt/super-piru/main/app/src/main/assets/";
+    private static final String[] FILES = { "index.html", "game.js" };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,7 +68,78 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(), "Android");
         setContentView(web);
         hideBars();
-        web.loadUrl("file:///android_asset/index.html");
+        web.loadUrl(gameUrl());
+        checkUpdate();
+    }
+
+    /* ---------- Actualización automática del juego ---------- */
+    private File gameDir() { return new File(getFilesDir(), "juego"); }
+
+    private int bundledVersion() {
+        try (InputStream in = getAssets().open("version.txt")) {
+            return Integer.parseInt(new String(readAll(in), StandardCharsets.UTF_8).trim());
+        } catch (Exception e) { return 0; }
+    }
+
+    private int downloadedVersion() {
+        File ok = new File(gameDir(), "version.txt");
+        if (!ok.exists()) return 0;
+        for (String f : FILES) if (!new File(gameDir(), f).exists()) return 0;
+        try (InputStream in = new java.io.FileInputStream(ok)) {
+            return Integer.parseInt(new String(readAll(in), StandardCharsets.UTF_8).trim());
+        } catch (Exception e) { return 0; }
+    }
+
+    private int currentVersion() { return Math.max(bundledVersion(), downloadedVersion()); }
+
+    private String gameUrl() {
+        if (downloadedVersion() > bundledVersion()) return "file://" + new File(gameDir(), "index.html").getAbsolutePath();
+        return "file:///android_asset/index.html";
+    }
+
+    private static byte[] readAll(InputStream in) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buf = new byte[16384]; int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        return out.toByteArray();
+    }
+
+    private static byte[] fetch(String url) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url + "?t=" + System.currentTimeMillis()).openConnection();
+        c.setConnectTimeout(8000); c.setReadTimeout(15000); c.setUseCaches(false);
+        try {
+            if (c.getResponseCode() != 200) throw new Exception("HTTP " + c.getResponseCode());
+            try (InputStream in = c.getInputStream()) { return readAll(in); }
+        } finally { c.disconnect(); }
+    }
+
+    private void checkUpdate() {
+        new Thread(() -> {
+            try {
+                int remote = Integer.parseInt(new String(fetch(BASE + "version.txt"), StandardCharsets.UTF_8).trim());
+                if (remote <= currentVersion()) return;
+                File tmp = new File(getFilesDir(), "juego_nuevo");
+                deleteDir(tmp); tmp.mkdirs();
+                for (String f : FILES) {
+                    byte[] data = fetch(BASE + f);
+                    if (data.length < 200) return;  // descarga incompleta: no se toca nada
+                    if (f.equals("game.js") && !new String(data, StandardCharsets.UTF_8).contains("buildLevels")) return;
+                    try (FileOutputStream o = new FileOutputStream(new File(tmp, f))) { o.write(data); }
+                }
+                try (FileOutputStream o = new FileOutputStream(new File(tmp, "version.txt"))) { o.write(String.valueOf(remote).getBytes(StandardCharsets.UTF_8)); }
+                File dir = gameDir();
+                deleteDir(dir);
+                if (!tmp.renameTo(dir)) return;
+                runOnUiThread(() -> web.evaluateJavascript("window.onUpdateReady && window.onUpdateReady(" + remote + ");", null));
+            } catch (Exception ignored) { }
+        }).start();
+    }
+
+    private static void deleteDir(File d) {
+        if (d == null || !d.exists()) return;
+        File[] l = d.listFiles();
+        if (l != null) for (File f : l) { if (f.isDirectory()) deleteDir(f); else f.delete(); }
+        d.delete();
     }
 
     private void hideBars() {
@@ -114,6 +197,14 @@ public class MainActivity extends Activity {
                 if (Build.VERSION.SDK_INT >= 26) v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
                 else v.vibrate(ms);
             } catch (Exception ignored) { }
+        }
+
+        @JavascriptInterface
+        public int gameVersion() { return currentVersion(); }
+
+        @JavascriptInterface
+        public void reload() {
+            runOnUiThread(() -> web.loadUrl(gameUrl()));
         }
 
         @JavascriptInterface

@@ -818,10 +818,18 @@ function onBack() {
 window.onBack = onBack;
 window.onAppPause = () => { if (state === 'play') setPause(true); if (AU.ac) AU.ac.suspend(); };
 window.onAppResume = () => { if (AU.ac) AU.ac.resume(); };
+/* Actualización descargada en segundo plano: se aplica en el menú, nunca a mitad de nivel */
+let updatePending = false;
+const GAME_VERSION = (() => { try { return (window.Android && Android.gameVersion) ? Android.gameVersion() : 0; } catch (e) { return 0; } })();
+window.onUpdateReady = () => {
+  updatePending = true;
+  if (state === 'title' || state === 'select') applyUpdate();
+};
+function applyUpdate() { if (updatePending && window.Android && Android.reload) { updatePending = false; Android.reload(); } }
 function setPause(on) { AU.sfx('pause'); state = on ? 'pause' : 'play'; }
 function go(s) {
   state = s; stateT = 0;
-  if (s === 'title' || s === 'select') { lvl = null; AU.playSong(4); }
+  if (s === 'title' || s === 'select') { lvl = null; AU.playSong(4); if (updatePending) { applyUpdate(); return; } }
   if (s === 'win') AU.playSong(4);
 }
 
@@ -1356,6 +1364,7 @@ function renderTitle() {
   const bw = H * 0.32, bh = H * 0.1;
   uiButton('music', W - bw - H * 0.05, H * 0.05, bw, bh, '♪ ' + (save.music ? 'Sí' : 'No'), { c1: '#7aa8ff', c2: '#3e6be8' });
   text('La Piruleta Café Pan · Alcorcón', W / 2, H * 0.95, H * 0.035, '#fff');
+  if (GAME_VERSION) text('v' + GAME_VERSION, H * 0.06, H * 0.95, H * 0.03, 'rgba(255,255,255,0.8)', 'left');
 }
 function renderSelect() {
   titleBg();
